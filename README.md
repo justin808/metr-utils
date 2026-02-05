@@ -1,9 +1,10 @@
 # toggl_db
 
-A read-only CLI tool for exploring your local Toggl Track SQLite database.
+A read-only CLI tool for exploring your local Toggl Track SQLite database and generating Metr TASK END reports.
 
 ## Features
 
+- **Metr TASK END reports** - Generate productivity reports with AI usage breakdown
 - **Strictly read-only** - Multiple safety layers prevent any database modifications
 - **Auto-discovery** - Automatically finds your Toggl database on macOS, Linux, and Windows
 - **Flexible output** - Table, JSON, and CSV formats
@@ -23,50 +24,92 @@ bundle install
 # Find your Toggl database
 bin/toggl_db find
 
-# List all tables
-bin/toggl_db tables
+# Generate a Metr TASK END report
+bin/toggl_db task-end
 
-# Sample data from a table
-bin/toggl_db sample time_entries
-
-# Run a query
-bin/toggl_db query "SELECT * FROM projects LIMIT 10"
+# Explore database tables
+bin/toggl_db db tables
 ```
 
 ## Commands
 
+### High-Level Commands
+
 | Command | Description |
 |---------|-------------|
+| `task-end` | Generate a Metr TASK END report from today's entries |
 | `find` | Find and display the Toggl database location |
-| `tables` | List all tables (use `--counts` for row counts) |
-| `schema TABLE` | Show column information for a table |
-| `query SQL` | Execute a read-only SQL query |
-| `sample TABLE` | Show sample rows from a table |
-| `search TERM` | Search for tables/columns by name |
-| `locations` | Show database search priority and paths |
 | `config` | Manage configuration settings |
+| `version` | Show version information |
 
-### Global Options
+### Database Exploration (`db` subcommand)
+
+| Command | Description |
+|---------|-------------|
+| `db tables` | List all tables (use `--counts` for row counts) |
+| `db schema TABLE` | Show column information for a table |
+| `db query SQL` | Execute a read-only SQL query |
+| `db sample TABLE` | Show sample rows from a table |
+| `db search TERM` | Search for tables/columns by name |
+| `db locations` | Show database search priority and paths |
+
+## task-end Command
+
+Generate Metr TASK END reports for productivity research:
+
+```bash
+# Show today's entries and pick which to report
+bin/toggl_db task-end
+
+# Specify time range
+bin/toggl_db task-end --from "8:30am"
+
+# Interactive mode for entering estimates
+bin/toggl_db task-end --interactive
+```
+
+### Selection Interface
+
+When multiple entries exist, you can:
+- Select a single entry: `5`
+- Select a range: `1-5`
+- Select multiple: `1,3,5` or `1-3,5`
+- Combine all: `A`
+- Toggle sort by title: `T` (groups related tasks together)
+
+### Task Description Metadata
+
+Add estimates to your Toggl task descriptions using ` -- `:
+
+```
+Task name -- 30 min, 4 hours without
+```
+
+- First value (30 min) = With-AI estimate
+- Second value (4 hours) = Without-AI estimate
+- Use `-- continue` for continuation entries
+
+### Output Example
+
+```
+============================================================
+TASK END
+Task: Metr Task Tracking using cowork
+Clock: 11:46 AM - 03:01 PM
+Focused time: 2.8hr
+AI %: 33.2% (Claude 33.2%)
+With-AI estimate: 30 min
+Without-AI estimate: 4 hours
+Quality: [1-5]
+Notes: App breakdown - Claude: 33.2%, Conductor: 25.2%, Slack: 22.4%
+============================================================
+```
+
+## Global Options
 
 ```bash
 -d, --database PATH   # Specify database path explicitly
 -f, --format FORMAT   # Output format: table, json, csv (default: table)
-```
-
-### Examples
-
-```bash
-# Export projects as JSON
-bin/toggl_db query "SELECT * FROM projects" -f json > projects.json
-
-# Show time entries as CSV
-bin/toggl_db sample time_entries -f csv
-
-# Use a specific database file
-bin/toggl_db tables -d ~/path/to/toggl.db
-
-# Search for time-related tables and columns
-bin/toggl_db search time
 ```
 
 ## Configuration
@@ -75,15 +118,16 @@ Store persistent settings in `~/.config/toggl_db/config.yml`:
 
 ```bash
 # Set your database path once
-bin/toggl_db config set database_path ~/Library/Application\ Support/Toggl\ Track/toggl.db
+bin/toggl_db config set database_path ~/path/to/toggl.db
+
+# Set deploy target for bin/deploy
+bin/toggl_db config set deploy_path ~/Documents/ClaudeCowork/Metr
 
 # View all settings
 bin/toggl_db config list
-
-# Available settings
-bin/toggl_db config set default_format json    # Default output format
-bin/toggl_db config set default_limit 50       # Default query row limit
 ```
+
+See `config.example.yml` for all available settings.
 
 ### Database Search Priority
 
@@ -92,7 +136,19 @@ bin/toggl_db config set default_limit 50       # Default query row limit
 3. Config file `database_path` setting
 4. Auto-discovery from standard locations
 
-Run `bin/toggl_db locations` to see all search paths and current values.
+Run `bin/toggl_db db locations` to see all search paths and current values.
+
+## Deployment
+
+Deploy to a cloud folder or shared location:
+
+```bash
+# Deploy to a specific path and save it
+bin/deploy /path/to/folder --save
+
+# Subsequent deploys use saved path
+bin/deploy
+```
 
 ## Read-Only Safety
 
