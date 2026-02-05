@@ -19,6 +19,9 @@ module TogglDb
       true
     end
 
+    # Remove the built-in tree command (shows confusing internal naming)
+    remove_command :tree
+
     # Register the db subcommand for advanced database exploration
     desc 'db SUBCOMMAND', 'Database exploration commands (advanced)'
     subcommand 'db', DbCommands
