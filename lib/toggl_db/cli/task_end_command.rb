@@ -425,13 +425,19 @@ module TogglDb
     end
 
     def format_time_range(entry)
-      start_str = entry[:start_time].strftime('%Y-%m-%d %I:%M %p')
-      end_str = if entry[:start_time].to_date == entry[:end_time].to_date
-                  entry[:end_time].strftime('%I:%M %p')
-                else
-                  entry[:end_time].strftime('%Y-%m-%d %I:%M %p')
-                end
-      "#{start_str} - #{end_str}"
+      same_day = entry[:start_time].to_date == entry[:end_time].to_date
+      if same_day
+        # Same day: show date once, then just times
+        date_str = entry[:start_time].strftime('%Y-%m-%d')
+        start_time = entry[:start_time].strftime('%I:%M %p')
+        end_time = entry[:end_time].strftime('%I:%M %p')
+        "#{date_str} #{start_time} - #{end_time}"
+      else
+        # Different days: show full date+time for both
+        start_str = entry[:start_time].strftime('%Y-%m-%d %I:%M %p')
+        end_str = entry[:end_time].strftime('%Y-%m-%d %I:%M %p')
+        "#{start_str} - #{end_str}"
+      end
     end
 
     def format_ai_details(app_breakdown)
