@@ -1,0 +1,15 @@
+# toggl_db configuration
+# Copy to ~/.config/toggl_db/config.yml
+
+# Path to Toggl database (default: auto-discover)
+# macOS: ~/Library/Group Containers/*toggl*/production/*.db
+database_path: null
+
+# Default output format: table, json, csv (default: table)
+default_format: table
+
+# Default row limit for queries (default: 100)
+default_limit: 100
+
+# Path to deploy CLI files (for bin/deploy without arguments)
+deploy_path: null

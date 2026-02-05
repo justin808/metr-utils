@@ -1,0 +1,30 @@
+AllCops:
+  NewCops: enable
+  TargetRubyVersion: 3.2
+  Exclude:
+    - 'vendor/**/*'
+
+# CLI/module documentation is in CLAUDE.md
+Style/Documentation:
+  Enabled: false
+
+# CLI methods tend to be longer due to output formatting
+Metrics/MethodLength:
+  Max: 35
+
+Metrics/AbcSize:
+  Max: 30
+
+Metrics/CyclomaticComplexity:
+  Max: 15
+
+Metrics/PerceivedComplexity:
+  Max: 15
+
+# Allow format strings with %s for simplicity
+Style/FormatStringToken:
+  Enabled: false
+
+# Allow class length for CLI which has many commands
+Metrics/ClassLength:
+  Max: 400

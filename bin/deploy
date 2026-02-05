@@ -1,0 +1,103 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+#
+# Deploy toggl_db CLI to a target directory (e.g., cloud co-work folder)
+#
+# Usage:
+#   bin/deploy                           # Use saved deploy_path from config
+#   bin/deploy /path/to/folder           # Deploy to specified path
+#   bin/deploy /path/to/folder --save    # Deploy and save path to config
+#
+require 'fileutils'
+require_relative '../lib/toggl_db/config'
+
+SCRIPT_DIR = File.dirname(__FILE__)
+PROJECT_DIR = File.expand_path('..', SCRIPT_DIR)
+
+def usage
+  puts 'Usage: bin/deploy [TARGET_DIR] [--save]'
+  puts ''
+  puts 'Deploys the toggl_db CLI to the specified directory.'
+  puts ''
+  puts 'Options:'
+  puts '  --save    Save the target directory to config for future use'
+  puts ''
+  puts 'If no TARGET_DIR is specified, uses the saved deploy_path from config.'
+  puts ''
+  puts "Config file: #{TogglDb::Config.path}"
+  saved = TogglDb::Config['deploy_path']
+  puts "Saved deploy_path: #{saved || '(not set)'}"
+  puts ''
+  puts 'Examples:'
+  puts '  bin/deploy ~/Dropbox/cowork/metr-utils --save'
+  puts '  bin/deploy                              # uses saved path'
+  exit 1
+end
+
+# Parse arguments
+args = ARGV.dup
+save_flag = args.delete('--save')
+target_dir = args.first
+
+# If no target specified, try config
+if target_dir.nil?
+  target_dir = TogglDb::Config['deploy_path']
+  if target_dir.nil?
+    puts 'Error: No target directory specified and no deploy_path saved in config.'
+    puts ''
+    usage
+  end
+end
+
+target_dir = File.expand_path(target_dir)
+
+# Save to config if requested
+if save_flag
+  TogglDb::Config['deploy_path'] = target_dir
+  TogglDb::Config.save
+  puts "Saved deploy_path to config: #{target_dir}"
+  puts ''
+end
+
+# Ensure target directory exists
+FileUtils.mkdir_p(target_dir)
+
+puts "Deploying toggl_db to: #{target_dir}"
+puts ''
+
+# Files/directories to deploy
+FILES_TO_COPY = [
+  'bin/toggl_db',
+  'lib/toggl_db.rb',
+  'lib/toggl_db',
+  'Gemfile',
+  'Gemfile.lock',
+  'CLAUDE.md'
+].freeze
+
+FILES_TO_COPY.each do |item|
+  src = File.join(PROJECT_DIR, item)
+  dest = File.join(target_dir, item)
+
+  if File.directory?(src)
+    FileUtils.mkdir_p(dest)
+    FileUtils.cp_r(Dir.glob("#{src}/*"), dest)
+    puts "  [dir]  #{item}/"
+  elsif File.exist?(src)
+    FileUtils.mkdir_p(File.dirname(dest))
+    FileUtils.cp(src, dest)
+    puts "  [file] #{item}"
+  else
+    puts "  [skip] #{item} (not found)"
+  end
+end
+
+# Make bin/toggl_db executable
+File.chmod(0o755, File.join(target_dir, 'bin/toggl_db'))
+
+puts ''
+puts 'Done! To use:'
+puts "  cd #{target_dir}"
+puts '  bundle install'
+puts '  bin/toggl_db --help'
