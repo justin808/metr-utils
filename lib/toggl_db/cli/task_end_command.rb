@@ -1,6 +1,8 @@
 # frozen_string_literal: true
 
 require 'time'
+require_relative 'metr_formatter'
+require_relative '../task_store'
 
 module TogglDb
   class CLI < Thor
@@ -8,7 +10,7 @@ module TogglDb
     CORE_DATA_EPOCH = Time.utc(2001, 1, 1).to_i
 
     # Apps considered AI tools for percentage calculation
-    AI_APPS = %w[Claude ChatGPT Gemini Copilot Cursor].freeze
+    AI_APPS = %w[Claude ChatGPT Gemini Copilot Cursor Conductor].freeze
 
     # Metadata separator in task descriptions
     METADATA_SEPARATOR = ' -- '
@@ -26,15 +28,23 @@ module TogglDb
         1,3,5   (entries 1, 3, and 5)
         1-3,5   (entries 1 through 3, plus 5)
 
+      Use --format metr for strict Metr format output.
+
       Examples:
         $ toggl_db task-end                    # Show today's entries, pick one
         $ toggl_db task-end --from "8:30am"    # From 8:30am to now
-        $ toggl_db task-end --interactive      # Prompt for estimates
+        $ toggl_db task-end --interactive      # Prompt for all fields
+        $ toggl_db task-end --format metr      # Output in strict Metr format
+        $ toggl_db task-end -o ~/report.txt    # Write to file
     DESC
     option :from, type: :string, desc: 'Start time (e.g., "8:30am", "2024-01-15 09:00")'
     option :to, type: :string, desc: 'End time (e.g., "now", "5:30pm")'
     option :interactive, aliases: '-i', type: :boolean, default: false,
-                         desc: 'Prompt for Without-AI estimate and Quality rating'
+                         desc: 'Prompt for all Metr fields interactively'
+    option :format, aliases: '-f', type: :string, enum: %w[default metr], default: 'default',
+                    desc: 'Output format (default or metr)'
+    option :output, aliases: '-o', type: :string, desc: 'Write output to file'
+    option :task_id, type: :numeric, desc: 'Link to a tracked task ID'
     option :database, aliases: '-d', type: :string,
                       desc: 'Path to Toggl database (default: auto-discover)'
     def task_end
@@ -55,7 +65,14 @@ module TogglDb
       app_breakdown = calculate_app_breakdown(activities)
       ai_percentage = calculate_ai_percentage(app_breakdown)
 
-      print_task_end_report(combined, app_breakdown, ai_percentage)
+      # Determine task ID from option, current task, or prompt
+      task_id = determine_task_id
+
+      # Build report data
+      report_data = build_report_data(combined, app_breakdown, ai_percentage, task_id)
+
+      # Output in requested format
+      output_task_end_report(report_data)
     rescue DatabaseNotFoundError => e
       error_and_exit(e.message)
     ensure
@@ -251,37 +268,141 @@ module TogglDb
       }
     end
 
-    def print_task_end_report(entry, app_breakdown, ai_percentage)
-      estimates = extract_or_prompt_estimates(entry[:metadata])
-      say ''
-      say '=' * 60, :green
-      say 'TASK END', :green
-      say "Task: #{entry[:task_name]}"
-      say "Clock: #{format_time_range(entry)}"
-      say "Focused time: #{format_duration(entry[:duration_seconds])}"
-      say "AI %: #{ai_percentage}% (#{format_ai_details(app_breakdown)})"
-      say "With-AI estimate: #{estimates[:with_ai]}" if estimates[:with_ai]
-      say "Without-AI estimate: #{estimates[:without_ai]}"
-      say "Quality: #{estimates[:quality]}"
-      say "Notes: App breakdown - #{format_app_breakdown(app_breakdown)}" if app_breakdown.any?
-      say '=' * 60, :green
+    def determine_task_id
+      return options[:task_id] if options[:task_id]
+
+      current = TaskStore.current_task
+      return current['id'] if current
+
+      nil
     end
 
-    def extract_or_prompt_estimates(metadata)
-      # Try to parse metadata first: "30 min, 4 hours without"
-      if metadata
-        parsed = parse_metadata_estimates(metadata)
-        return parsed if parsed
+    def build_report_data(entry, app_breakdown, ai_percentage, task_id)
+      total_minutes = (entry[:duration_seconds] / 60.0).round
+      used_ai = ai_percentage.positive?
+
+      # Get user-provided fields if interactive or metr format
+      user_fields = prompt_task_end_fields(entry, total_minutes, ai_percentage)
+
+      {
+        task_id: task_id,
+        task_name: entry[:task_name],
+        end_time: entry[:end_time],
+        clock_range: format_time_range(entry),
+        used_ai: used_ai,
+        total_elapsed_minutes: total_minutes,
+        active_work_minutes: user_fields[:active_work_minutes],
+        waiting_ai_minutes: user_fields[:waiting_ai_minutes],
+        outcome: user_fields[:outcome],
+        ai_percentage: ai_percentage,
+        ai_turns: user_fields[:ai_turns],
+        without_ai_minutes: user_fields[:without_ai_minutes],
+        quality_vs_self: user_fields[:quality_vs_self],
+        with_ai_estimate: user_fields[:with_ai_estimate],
+        notes: format_app_breakdown(app_breakdown),
+        ai_details: format_ai_details(app_breakdown),
+        app_breakdown_text: format_app_breakdown(app_breakdown)
+      }
+    end
+
+    def prompt_task_end_fields(entry, total_minutes, ai_percentage)
+      # Try to parse metadata first
+      parsed = parse_metadata_estimates(entry[:metadata]) if entry[:metadata]
+      used_ai = ai_percentage.positive?
+
+      # If not interactive and not metr format, return minimal data
+      unless options[:interactive] || options[:format] == 'metr'
+        return {
+          with_ai_estimate: parsed&.dig(:with_ai),
+          without_ai_minutes: parsed&.dig(:without_ai) || '[YOU FILL IN]',
+          quality_vs_self: parsed&.dig(:quality) || '[1-5]',
+          active_work_minutes: nil,
+          waiting_ai_minutes: nil,
+          outcome: nil,
+          ai_turns: nil
+        }
       end
 
-      return { with_ai: nil, without_ai: '[YOU FILL IN]', quality: '[1-5]' } unless options[:interactive]
-
       say ''
+      say 'Collecting Metr task end data...', :green
+      say ''
+
+      # TIME BREAKDOWN
+      active_work = ask_numeric_field('Active work time (minutes):', default: total_minutes)
+      waiting_ai = used_ai ? ask_numeric_field('Waiting/reviewing AI time (minutes):', default: 0) : 0
+
+      # OUTCOME
+      outcome = ask_choice_field('Outcome:', MetrFormatter::OUTCOMES)
+
+      # AI fields
+      ai_turns = used_ai ? ask_numeric_field('Number of AI turns:') : nil
+
+      # Without AI estimate
+      without_ai_default = parsed&.dig(:without_ai)
+      without_ai = ask_numeric_field('Without AI would take (minutes):', default: without_ai_default&.to_i)
+
+      # Quality
+      quality = used_ai ? ask_choice_field('Quality vs yourself:', MetrFormatter::QUALITY_RATINGS) : nil
+
       {
-        with_ai: nil,
-        without_ai: ask('Without-AI estimate (e.g., "4 hours"):'),
-        quality: ask('Quality rating (1-5):')
+        with_ai_estimate: parsed&.dig(:with_ai),
+        without_ai_minutes: without_ai,
+        quality_vs_self: quality,
+        active_work_minutes: active_work,
+        waiting_ai_minutes: waiting_ai,
+        outcome: outcome,
+        ai_turns: ai_turns
       }
+    end
+
+    def ask_numeric_field(prompt, default: nil)
+      default_hint = default ? " [#{default}]" : ''
+      response = ask("#{prompt}#{default_hint}")
+      return default if response.strip.empty? && default
+
+      response.to_i
+    end
+
+    def ask_choice_field(prompt, choices, default: nil)
+      say prompt
+      choices.each_with_index { |c, i| say "  #{i + 1}. #{c}" }
+      default_idx = default ? choices.index(default) + 1 : nil
+      default_hint = default_idx ? " [#{default_idx}]" : ''
+      response = ask("Select (1-#{choices.length})#{default_hint}:")
+
+      return default if response.strip.empty? && default
+
+      idx = response.to_i - 1
+      idx >= 0 && idx < choices.length ? choices[idx] : (default || choices.first)
+    end
+
+    def output_task_end_report(data)
+      output = MetrFormatter.format_task_end(data, format: options[:format].to_sym)
+
+      if options[:output]
+        File.write(options[:output], "#{output}\n")
+        say "Output written to: #{options[:output]}", :green
+      else
+        say ''
+        say output
+      end
+
+      # Update task store if we have a task ID
+      update_task_store(data) if data[:task_id]
+    end
+
+    def update_task_store(data)
+      TaskStore.end_task(data[:task_id], {
+                           outcome: data[:outcome],
+                           actual_elapsed_minutes: data[:total_elapsed_minutes],
+                           active_work_minutes: data[:active_work_minutes],
+                           waiting_ai_minutes: data[:waiting_ai_minutes],
+                           ai_percentage: data[:ai_percentage],
+                           ai_turns: data[:ai_turns],
+                           without_ai_minutes: data[:without_ai_minutes],
+                           quality_vs_self: data[:quality_vs_self],
+                           notes: data[:notes]
+                         })
     end
 
     def parse_metadata_estimates(metadata)
@@ -304,7 +425,19 @@ module TogglDb
     end
 
     def format_time_range(entry)
-      "#{entry[:start_time].strftime('%I:%M %p')} - #{entry[:end_time].strftime('%I:%M %p')}"
+      same_day = entry[:start_time].to_date == entry[:end_time].to_date
+      if same_day
+        # Same day: show date once, then just times
+        date_str = entry[:start_time].strftime('%Y-%m-%d')
+        start_time = entry[:start_time].strftime('%I:%M %p')
+        end_time = entry[:end_time].strftime('%I:%M %p')
+        "#{date_str} #{start_time} - #{end_time}"
+      else
+        # Different days: show full date+time for both
+        start_str = entry[:start_time].strftime('%Y-%m-%d %I:%M %p')
+        end_str = entry[:end_time].strftime('%Y-%m-%d %I:%M %p')
+        "#{start_str} - #{end_str}"
+      end
     end
 
     def format_ai_details(app_breakdown)
