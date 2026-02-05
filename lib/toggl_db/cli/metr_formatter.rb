@@ -188,13 +188,13 @@ module TogglDb
     # --- Helper methods ---
 
     def format_time(time)
-      return Time.now.strftime('%H:%M') if time.nil?
+      return Time.now.strftime('%Y-%m-%d %H:%M') if time.nil?
 
       case time
       when String
-        Time.parse(time).strftime('%H:%M')
+        Time.parse(time).strftime('%Y-%m-%d %H:%M')
       when Time
-        time.strftime('%H:%M')
+        time.strftime('%Y-%m-%d %H:%M')
       else
         time.to_s
       end

@@ -122,7 +122,7 @@ The command prompts for:
 ```
 === TASK START ===
 Task ID: 1
-Time: 09:30
+Time: 2024-01-15 09:30
 Description: Implement user authentication
 
 1. WILL USE AI? Yes
@@ -182,7 +182,7 @@ Task name -- 30 min, 4 hours without
 ============================================================
 TASK END
 Task: Metr Task Tracking using cowork
-Clock: 11:46 AM - 03:01 PM
+Clock: 2024-01-15 11:46 AM - 03:01 PM
 Focused time: 2.8hr
 AI %: 33.2% (Claude 33.2%)
 With-AI estimate: 30 min
@@ -197,7 +197,7 @@ Notes: App breakdown - Claude: 33.2%, Conductor: 25.2%, Slack: 22.4%
 ```
 === TASK END ===
 Task ID: 1
-Time: 15:01
+Time: 2024-01-15 15:01
 
 1. USED AI? Yes
 2. TOTAL ELAPSED: 168 min
@@ -243,7 +243,7 @@ The command prompts for:
 
 ```
 === SNAPSHOT ===
-Time: 10:45
+Time: 2024-01-15 10:45
 
 1. AI INVOLVED? Yes-actively using
 2. FOCUS: Fully on one thing

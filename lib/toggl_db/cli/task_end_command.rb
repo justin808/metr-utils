@@ -425,7 +425,13 @@ module TogglDb
     end
 
     def format_time_range(entry)
-      "#{entry[:start_time].strftime('%I:%M %p')} - #{entry[:end_time].strftime('%I:%M %p')}"
+      start_str = entry[:start_time].strftime('%Y-%m-%d %I:%M %p')
+      end_str = if entry[:start_time].to_date == entry[:end_time].to_date
+                  entry[:end_time].strftime('%I:%M %p')
+                else
+                  entry[:end_time].strftime('%Y-%m-%d %I:%M %p')
+                end
+      "#{start_str} - #{end_str}"
     end
 
     def format_ai_details(app_breakdown)
