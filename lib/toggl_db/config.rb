@@ -11,7 +11,8 @@ module TogglDb
     DEFAULTS = {
       'database_path' => nil,        # Path to Toggl database (nil = auto-discover)
       'default_format' => 'table',   # Output format: table, json, csv
-      'default_limit' => 100         # Default row limit for queries
+      'default_limit' => 100,        # Default row limit for queries
+      'deploy_path' => nil           # Path to deploy CLI files
     }.freeze
 
     class << self
