@@ -4,7 +4,11 @@ require 'thor'
 require 'json'
 require_relative '../toggl_db'
 require_relative 'cli/db_commands'
+require_relative 'cli/metr_formatter'
 require_relative 'cli/task_end_command'
+require_relative 'cli/task_start_command'
+require_relative 'cli/snapshot_command'
+require_relative 'task_store'
 
 module TogglDb
   class CLI < Thor
@@ -111,7 +115,54 @@ module TogglDb
       end
     end
 
+    desc 'status', 'Show current task status and recent tasks'
+    long_desc <<~DESC
+      Shows the current in-progress task (if any) and recent task history.
+
+      Example:
+        $ toggl_db status
+    DESC
+    option :limit, aliases: '-l', type: :numeric, default: 5,
+                   desc: 'Number of recent tasks to show'
+    def status
+      say ''
+      display_current_task
+      say ''
+      display_recent_tasks
+      say ''
+      say "Task store: #{TaskStore.path}", :cyan
+    end
+
     private
+
+    def display_current_task
+      current = TaskStore.current_task
+      if current
+        say 'Current Task:', :green
+        say "  ##{current['id']}: #{current['description']}"
+        say "  Type: #{current['type']}"
+        say "  Started: #{current['started_at']}"
+        say "  AI: #{current['use_ai'] ? 'Yes' : 'No'}"
+        snapshots = current['snapshots']&.length || 0
+        say "  Snapshots: #{snapshots}"
+      else
+        say 'No task in progress.', :yellow
+        say "Use 'toggl_db task-start' to begin a new task."
+      end
+    end
+
+    def display_recent_tasks
+      recent = TaskStore.recent_tasks(options[:limit])
+      if recent.any?
+        say "Recent Tasks (last #{options[:limit]}):", :green
+        recent.each do |task|
+          status_indicator = task['ended_at'] ? 'done' : 'active'
+          say "  ##{task['id']}: #{task['description']} [#{status_indicator}]"
+        end
+      else
+        say 'No tasks recorded yet.', :yellow
+      end
+    end
 
     def config_list
       say "Config file: #{Config.path}", :green
