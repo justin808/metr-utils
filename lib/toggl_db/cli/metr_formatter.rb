@@ -6,7 +6,29 @@ module TogglDb
   # rubocop:disable Metrics/ModuleLength
   module MetrFormatter
     # Constants for choice fields
-    TASK_TYPES = %w[Code Debug Research Write Meet Plan Break Other].freeze
+    TASK_TYPES = %w[Feature Bug Refactor Tests Docs Investigation Review Meeting Other].freeze
+
+    CONFIDENCE_OPTIONS = [
+      'Very uncertain',
+      'Somewhat confident',
+      'Very confident'
+    ].freeze
+
+    WHY_AI_OPTIONS = [
+      'Tedious/repetitive',
+      'Outside my expertise',
+      'Needs boilerplate',
+      'Exploring/uncertain',
+      'Time pressure',
+      'Default workflow'
+    ].freeze
+
+    WOULD_DO_WITHOUT_AI_OPTIONS = [
+      'Yes same scope',
+      'Yes reduced scope',
+      'Probably not',
+      'Definitely not'
+    ].freeze
 
     OUTCOMES = [
       'Completed',
@@ -25,9 +47,9 @@ module TogglDb
 
     AI_INVOLVED_OPTIONS = [
       'No',
-      'Yes-waiting',
-      'Yes-actively using',
-      'Yes-using output'
+      'Waiting',
+      'Active',
+      'Using output'
     ].freeze
 
     FOCUS_OPTIONS = [
@@ -38,7 +60,7 @@ module TogglDb
 
     AI_VANISHED_OPTIONS = [
       'Unaffected',
-      'Somewhat longer',
+      'Slower',
       'Much longer',
       'Blocked'
     ].freeze
@@ -76,22 +98,36 @@ module TogglDb
 
     # --- TASK START formatters ---
 
+    # rubocop:disable Metrics/AbcSize
     def format_task_start_metr(task)
       lines = []
       lines << '=== TASK START ==='
       lines << "Task ID: #{task['id']}"
       lines << "Time: #{format_time(task['started_at'])}"
-      lines << "Description: #{task['description']}"
       lines << ''
-      lines << "1. WILL USE AI? #{task['use_ai'] ? 'Yes' : 'No'}"
-      lines << "2. EXPECTED TIME: #{task['expected_time_minutes']} min"
-      lines << "3. WITHOUT AI WOULD TAKE: #{task['without_ai_time_minutes']} min"
-      lines << "4. CONFIDENCE (1-5): #{task['confidence']}"
-      lines << "5. WHY AI? #{task['why_ai'] || '[not specified]'}"
-      lines << "6. WOULD DO WITHOUT AI? #{task['would_do_without_ai'] ? 'Yes' : 'No'}"
+      lines << "1. DESCRIPTION: #{task['description']}"
+      lines << ''
+      lines << "2. USING AI? #{task['use_ai'] ? 'Yes' : 'No'}"
+      lines << ''
+      lines << "3. EXPECTED TIME: #{task['expected_time_minutes']} min"
+      lines << ''
+      lines << "4. WITHOUT AI WOULD TAKE: #{task['without_ai_time_minutes']} min"
+      lines << '   (If not using AI, same as #3)'
+      lines << "   Confidence: #{task['confidence']}"
+      lines << ''
+      why_ai_label = task['use_ai'] ? '5. WHY AI?' : '5. WHY AI? (skip if no AI)'
+      lines << why_ai_label
+      format_checkbox_options(lines, WHY_AI_OPTIONS, task['why_ai'])
+      lines << ''
+      would_do_label = '6. WITHOUT AI, WOULD YOU DO THIS?'
+      would_do_label += ' (skip if no AI)' unless task['use_ai']
+      lines << would_do_label
+      format_checkbox_options(lines, WOULD_DO_WITHOUT_AI_OPTIONS, task['would_do_without_ai'])
+      lines << ''
       lines << "7. TYPE: #{task['type']}"
       lines.join("\n")
     end
+    # rubocop:enable Metrics/AbcSize
 
     def format_task_start_default(task)
       lines = []
@@ -122,16 +158,26 @@ module TogglDb
       lines << "Time: #{format_time(data[:end_time])}"
       lines << ''
       lines << "1. USED AI? #{data[:used_ai] ? 'Yes' : 'No'}"
+      lines << ''
       lines << "2. TOTAL ELAPSED: #{data[:total_elapsed_minutes]} min"
+      lines << ''
       lines << '3. TIME BREAKDOWN:'
       lines << "   Active work: #{data[:active_work_minutes] || '___'} min"
-      lines << "   Waiting/reviewing AI: #{data[:waiting_ai_minutes] || '___'} min"
-      lines << "4. OUTCOME: #{data[:outcome] || '[select]'}"
+      lines << "   Waiting/reviewing AI: #{data[:waiting_ai_minutes] || '___'} min (0 if no AI)"
+      lines << ''
+      lines << '4. OUTCOME:'
+      format_checkbox_options(lines, OUTCOMES, data[:outcome])
+      lines << ''
       lines << '5. IF USED AI:'
       lines << "   % from AI: #{data[:ai_percentage] || '___'}"
       lines << "   # of AI turns: #{data[:ai_turns] || '___'}"
+      lines << ''
       lines << "6. WITHOUT AI WOULD TAKE: #{data[:without_ai_minutes] || '___'} min"
-      lines << "7. IF USED AI - QUALITY vs yourself: #{data[:quality_vs_self] || '[select]'}"
+      lines << '   (If no AI, same as #2)'
+      lines << ''
+      lines << '7. IF USED AI - QUALITY vs yourself:'
+      format_checkbox_options(lines, QUALITY_RATINGS, data[:quality_vs_self])
+      lines << ''
       lines << "8. NOTES: #{data[:notes] || ''}"
       lines.join("\n")
     end
@@ -160,12 +206,12 @@ module TogglDb
       lines << '=== SNAPSHOT ==='
       lines << "Time: #{format_time(data[:time])}"
       lines << ''
-      lines << "1. AI INVOLVED? #{data[:ai_involved] || '[select]'}"
-      lines << "2. FOCUS: #{data[:focus] || '[select]'}"
-      lines << "3. SAME TASK AS LAST SNAPSHOT? #{data[:same_task] || '[select]'}"
-      lines << "4. IF AI VANISHED: #{data[:ai_vanished_impact] || '[select]'}"
-      lines << "5. WHAT: #{data[:what] || '[description]'}"
-      lines << "   Type: #{data[:type] || '[select]'}"
+      lines << "1. AI involved? #{data[:ai_involved] || '[No / Waiting / Active / Using output]'}"
+      lines << "2. Focus: #{data[:focus] || '[Fully on one thing / Switching / Distracted]'}"
+      lines << "3. Same task as last snapshot? #{data[:same_task] || '[Yes / No / Don\'t know]'}"
+      lines << "4. If AI vanished: #{data[:ai_vanished_impact] || '[Unaffected / Slower / Much longer / Blocked]'}"
+      lines << "5. What are you doing? #{data[:what] || '[description]'}"
+      lines << "   Type: #{data[:type] || '[Code / Debug / Research / Write / Meet / Plan / Break / Other]'}"
       lines.join("\n")
     end
 
@@ -186,6 +232,14 @@ module TogglDb
     end
 
     # --- Helper methods ---
+
+    def format_checkbox_options(lines, options, selected)
+      selected_values = Array(selected)
+      options.each do |opt|
+        marker = selected_values.include?(opt) ? 'x' : ' '
+        lines << "   [#{marker}] #{opt}"
+      end
+    end
 
     def format_time(time)
       return Time.now.strftime('%Y-%m-%d %H:%M') if time.nil?

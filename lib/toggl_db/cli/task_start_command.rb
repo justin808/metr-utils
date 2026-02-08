@@ -12,12 +12,12 @@ module TogglDb
       Interactive prompts collect all required fields:
         - Task description
         - Whether AI will be used
-        - Expected time with AI
+        - Expected time
         - Estimated time without AI
-        - Confidence level (1-5)
-        - Why using AI (if applicable)
-        - Whether you would do this without AI
-        - Task type (Code, Debug, Research, etc.)
+        - Confidence (Very uncertain / Somewhat confident / Very confident)
+        - Why using AI (if applicable, multi-select)
+        - Without AI, would you do this? (if applicable)
+        - Task type (Feature, Bug, Refactor, Tests, etc.)
 
       Examples:
         $ toggl_db task-start                      # Interactive mode
@@ -47,12 +47,14 @@ module TogglDb
       say ''
 
       description = ask('Task description:')
-      use_ai = yes?('Will you use AI? (y/n)')
-      expected_time = ask_numeric('Expected time with AI (minutes):')
+      use_ai = yes?('Using AI? (y/n)')
+      expected_time = ask_numeric('Expected time (minutes):')
       without_ai_time = ask_numeric('Without AI would take (minutes):')
-      confidence = ask_confidence
-      why_ai = use_ai ? ask('Why use AI for this task?') : nil
-      would_do_without_ai = yes?('Would you do this task without AI? (y/n)')
+      confidence = ask_choice('Confidence:', MetrFormatter::CONFIDENCE_OPTIONS)
+      why_ai = use_ai ? ask_multi_choice('Why AI?', MetrFormatter::WHY_AI_OPTIONS) : nil
+      would_do_without_ai = if use_ai
+                              ask_choice('Without AI, would you do this?', MetrFormatter::WOULD_DO_WITHOUT_AI_OPTIONS)
+                            end
       task_type = ask_choice('Task type:', MetrFormatter::TASK_TYPES)
 
       {
@@ -75,13 +77,14 @@ module TogglDb
       response.to_i
     end
 
-    def ask_confidence
-      say 'Confidence level (1-5):'
-      say '  1 = Very uncertain'
-      say '  3 = Moderate confidence'
-      say '  5 = Very confident'
-      response = ask('Select (1-5):')
-      response.to_i.clamp(1, 5)
+    def ask_multi_choice(prompt, choices)
+      say prompt
+      choices.each_with_index { |c, i| say "  #{i + 1}. #{c}" }
+      say "Select (1-#{choices.length}, comma-separated for multiple):"
+      response = ask('>')
+      indices = response.split(',').map { |s| s.strip.to_i - 1 }
+      selected = indices.select { |i| i >= 0 && i < choices.length }.map { |i| choices[i] }
+      selected.empty? ? [choices.first] : selected
     end
 
     def ask_choice(prompt, choices, default: nil)
