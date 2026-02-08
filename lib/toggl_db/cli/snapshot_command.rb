@@ -10,10 +10,10 @@ module TogglDb
       Records a point-in-time snapshot of current work status for Metr productivity research.
 
       Prompts for:
-        - AI involvement (No, Yes-waiting, Yes-actively using, Yes-using output)
+        - AI involvement (No, Waiting, Active, Using output)
         - Focus level (Fully on one thing, Switching, Distracted)
         - Same task as last snapshot (Yes, No, Don't know)
-        - Impact if AI vanished (Unaffected, Somewhat longer, Much longer, Blocked)
+        - Impact if AI vanished (Unaffected, Slower, Much longer, Blocked)
         - What you're doing (one line description)
         - Task type (Code, Debug, Research, Write, Meet, Plan, Break, Other)
 
